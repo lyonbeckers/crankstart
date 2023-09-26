@@ -240,6 +240,14 @@ impl BitmapInner {
         )?;
         Ok(pixels_covered != 0)
     }
+
+    pub fn set_mask(&mut self, other: &Bitmap) -> Result<i32, Error> {
+        pd_func_caller!(
+            (*Graphics::get_ptr()).setBitmapMask,
+            self.raw_bitmap,
+            other.inner.borrow().raw_bitmap
+        )
+    }
 }
 
 impl Drop for BitmapInner {
@@ -342,6 +350,10 @@ impl Bitmap {
             other_flip,
             rect,
         )
+    }
+
+    pub fn set_mask(&mut self, other: &Bitmap) -> Result<i32, Error> {
+        self.inner.borrow_mut().set_mask(other)
     }
 }
 
