@@ -248,6 +248,10 @@ impl BitmapInner {
             other.inner.borrow().raw_bitmap
         )
     }
+
+    pub fn set_clip_rect(&mut self, x: i32, y: i32, width: i32, height: i32) -> Result<(), Error> {
+        pd_func_caller!((*Graphics::get_ptr()).setClipRect, x, y, width, height)
+    }
 }
 
 impl Drop for BitmapInner {
