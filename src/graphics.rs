@@ -247,6 +247,14 @@ impl BitmapInner {
         )?;
         Ok(pixels_covered != 0)
     }
+
+    pub fn set_mask(&mut self, other: &Bitmap) -> Result<i32, Error> {
+        pd_func_caller!(
+            (*Graphics::get_ptr()).setBitmapMask,
+            self.raw_bitmap,
+            other.inner.borrow().raw_bitmap
+        )
+    }
 }
 
 impl Drop for BitmapInner {
@@ -351,6 +359,10 @@ impl Bitmap {
             other_flip,
             rect,
         )
+    }
+
+    pub fn set_mask(&mut self, other: &Bitmap) -> Result<i32, Error> {
+        self.inner.borrow_mut().set_mask(other)
     }
 }
 
@@ -761,18 +773,17 @@ impl Graphics {
         let c_path = CString::new(path).map_err(Error::msg)?;
         let mut out_err: *const crankstart_sys::ctypes::c_char = ptr::null_mut();
         let font = pd_func_caller!((*self.0).loadFont, c_path.as_ptr(), &mut out_err)?;
-        if font.is_null() {
-            if !out_err.is_null() {
+        if font == ptr::null_mut() {
+            if out_err != ptr::null_mut() {
                 let err_msg = unsafe { CStr::from_ptr(out_err).to_string_lossy().into_owned() };
-                Err(anyhow!(err_msg))
-            } else {
-                Err(anyhow!(
-                    "load_font failed without providing an error message"
-                ))
+                return Err(anyhow!(err_msg));
             }
-        } else {
-            Font::new(font)
+            return Err(anyhow!(
+                "load_font failed without providing an error message"
+            ));
         }
+
+        Font::new(font)
     }
 
     pub fn set_font(&self, font: &Font) -> Result<(), Error> {
@@ -818,5 +829,13 @@ impl Graphics {
             PDStringEncoding::kUTF8Encoding,
             tracking,
         )
+    }
+
+    pub fn set_clip_rect(&self, x: i32, y: i32, width: i32, height: i32) -> Result<(), Error> {
+        pd_func_caller!((*self.0).setClipRect, x, y, width, height)
+    }
+
+    pub fn clear_clip_rect(&self) -> Result<(), Error> {
+        pd_func_caller!((*self.0).clearClipRect)
     }
 }

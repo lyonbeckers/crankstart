@@ -27,6 +27,8 @@ use {
     hashbrown::HashMap,
 };
 
+use core::cell::RefMut;
+
 pub use crankstart_sys::SpriteCollisionResponseType;
 
 // Currently no font:getHeight in C API.
@@ -218,6 +220,10 @@ impl SpriteInner {
     /// Returns a reference to the bitmap assigned to the sprite, if any.
     pub fn get_image(&self) -> Option<&Bitmap> {
         self.image.as_ref()
+    }
+
+    pub fn get_image_mut(&mut self) -> Option<&mut Bitmap> {
+        self.image.as_mut()
     }
 
     pub fn set_image(&mut self, bitmap: Bitmap, flip: LCDBitmapFlip) -> Result<(), Error> {
@@ -423,6 +429,14 @@ impl Sprite {
         Ok(filtered.ok())
     }
 
+    pub fn get_image_mut(&mut self) -> Result<Option<RefMut<Bitmap>>> {
+        let borrowed: RefMut<SpriteInner> = self.inner.try_borrow_mut().map_err(Error::msg)?;
+        let filtered: Result<RefMut<Bitmap>, _> =
+            RefMut::filter_map(borrowed, |b: &mut SpriteInner| b.get_image_mut());
+        // filter_map gives back the original if the closure returns None, which we don't need
+        Ok(filtered.ok())
+    }
+
     pub fn set_image(&mut self, bitmap: Bitmap, flip: LCDBitmapFlip) -> Result<(), Error> {
         self.inner
             .try_borrow_mut()
@@ -613,6 +627,33 @@ impl SpriteManager {
             .map(|inner_ptr| Sprite {
                 inner: inner_ptr.clone(),
             })
+    }
+
+    pub fn clear_clip_rects_in_range(
+        &mut self,
+        clip_rect: LCDRect,
+        start_z: i16,
+        end_z: i16,
+    ) -> Result<(), Error> {
+        pd_func_caller!(
+            (*self.playdate_sprite).clearClipRectsInRange,
+            start_z as i32,
+            end_z as i32
+        )
+    }
+
+    pub fn set_clip_rects_in_range(
+        &mut self,
+        clip_rect: LCDRect,
+        start_z: i16,
+        end_z: i16,
+    ) -> Result<(), Error> {
+        pd_func_caller!(
+            (*self.playdate_sprite).setClipRectsInRange,
+            clip_rect,
+            start_z as i32,
+            end_z as i32
+        )
     }
 
     pub fn update_and_draw_sprites(&mut self) -> Result<(), Error> {
