@@ -2,7 +2,7 @@ extern crate alloc;
 
 use {
     crate::{
-        graphics::{Bitmap, Graphics, LCDBitmapFlip, LCDColor, PDRect},
+        graphics::{Bitmap, Graphics, LCDBitmapDrawMode, LCDBitmapFlip, LCDColor, PDRect},
         log_to_console, pd_func_caller, pd_func_caller_log,
         system::System,
         Playdate,
@@ -99,8 +99,8 @@ impl<'a> Iterator for CollisionInfoIter<'a> {
             let sprite = sprite.unwrap();
             let other = other.unwrap();
             let collision_info = CollisionInfo {
-                sprite: sprite,
-                other: other,
+                sprite,
+                other,
                 info: &collision_slice[index],
             };
             Some(collision_info)
@@ -231,7 +231,7 @@ impl SpriteInner {
             (*self.playdate_sprite).setImage,
             self.raw_sprite,
             bitmap.inner.borrow().raw_bitmap,
-            flip.into()
+            flip,
         )?;
         self.image = Some(bitmap);
         Ok(())
@@ -243,6 +243,31 @@ impl SpriteInner {
 
     pub fn get_tag(&self) -> Result<u8, Error> {
         pd_func_caller!((*self.playdate_sprite).getTag, self.raw_sprite)
+    }
+
+    pub fn set_draw_mode(&self, mode: LCDBitmapDrawMode) -> Result<(), Error> {
+        pd_func_caller!((*self.playdate_sprite).setDrawMode, self.raw_sprite, mode)
+    }
+
+    pub fn set_visible(&mut self, visible: bool) -> Result<(), Error> {
+        pd_func_caller!(
+            (*self.playdate_sprite).setVisible,
+            self.raw_sprite,
+            visible as i32
+        )
+    }
+
+    pub fn is_visible(&self) -> Result<bool, Error> {
+        let visible = pd_func_caller!((*self.playdate_sprite).isVisible, self.raw_sprite)?;
+        Ok(visible != 0)
+    }
+
+    pub fn set_opaque(&self, opaque: bool) -> Result<(), Error> {
+        pd_func_caller!(
+            (*self.playdate_sprite).setOpaque,
+            self.raw_sprite,
+            opaque as i32
+        )
     }
 
     pub fn move_to(&mut self, x: f32, y: f32) -> Result<(), Error> {
@@ -430,11 +455,36 @@ impl Sprite {
         self.inner.try_borrow().map_err(Error::msg)?.get_tag()
     }
 
+    pub fn set_draw_mode(&mut self, mode: LCDBitmapDrawMode) -> Result<(), Error> {
+        self.inner
+            .try_borrow_mut()
+            .map_err(Error::msg)?
+            .set_draw_mode(mode)
+    }
+
     pub fn move_to(&mut self, x: f32, y: f32) -> Result<(), Error> {
         self.inner
             .try_borrow_mut()
             .map_err(Error::msg)?
             .move_to(x, y)
+    }
+
+    pub fn set_visible(&mut self, visible: bool) -> Result<(), Error> {
+        self.inner
+            .try_borrow_mut()
+            .map_err(Error::msg)?
+            .set_visible(visible)
+    }
+
+    pub fn is_visible(&self) -> Result<bool, Error> {
+        self.inner.try_borrow().map_err(Error::msg)?.is_visible()
+    }
+
+    pub fn set_opaque(&self, opaque: bool) -> Result<(), Error> {
+        self.inner
+            .try_borrow_mut()
+            .map_err(Error::msg)?
+            .set_opaque(opaque)
     }
 
     pub fn get_position(&self) -> Result<(f32, f32), Error> {
@@ -527,7 +577,7 @@ impl SpriteManager {
 
     pub fn new_sprite(&mut self) -> Result<Sprite, Error> {
         let raw_sprite = pd_func_caller!((*self.playdate_sprite).newSprite)?;
-        if raw_sprite == core::ptr::null_mut() {
+        if raw_sprite.is_null() {
             Err(anyhow!("new sprite failed"))
         } else {
             let sprite = SpriteInner {
@@ -574,10 +624,8 @@ impl SpriteManager {
         let weak_sprite = self.sprites.get(&raw_sprite);
         weak_sprite
             .and_then(|weak_sprite| weak_sprite.upgrade())
-            .and_then(|inner_ptr| {
-                Some(Sprite {
-                    inner: inner_ptr.clone(),
-                })
+            .map(|inner_ptr| Sprite {
+                inner: inner_ptr.clone(),
             })
     }
 
@@ -647,9 +695,9 @@ impl TextSprite {
 
         let width = graphics.get_system_text_width(text, tracking)?;
 
-        let mut text_bitmap =
+        let text_bitmap =
             graphics.new_bitmap(size2(width, SYSTEM_FONT_HEIGHT), background.clone())?;
-        graphics.with_context(&mut text_bitmap, || {
+        graphics.with_context(&text_bitmap, || {
             graphics.draw_text(text, point2(0, 0))?;
             Ok(())
         })?;
@@ -683,9 +731,9 @@ impl TextSprite {
 
         let width = graphics.get_system_text_width(text, tracking)?;
 
-        let mut text_bitmap =
+        let text_bitmap =
             graphics.new_bitmap(size2(width, SYSTEM_FONT_HEIGHT), self.background.clone())?;
-        graphics.with_context(&mut text_bitmap, || {
+        graphics.with_context(&text_bitmap, || {
             graphics.draw_text(text, point2(0, 0))?;
             Ok(())
         })?;
